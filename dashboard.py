@@ -192,7 +192,7 @@ positions = {
 # ROUTE VISUALIZATION
 # --------------------------------------------------
 
-def create_route_map(greedy_result, astar_result):
+def create_route_map(greedy_result, astar_result, start, goal):
 
     fig = go.Figure()
 
@@ -271,8 +271,9 @@ def create_route_map(greedy_result, astar_result):
         marker=dict(
             size=12,
             color=[
-                "#22c55e" if city == "Bucharest"
-                else "#f59e0b" if city == "Arad"
+                "#f59e0b" if city == start == goal
+                else "#22c55e" if city == start
+                else "#ef4444" if city == goal
                 else "#64748b"
                 for city in cities
             ],
@@ -345,15 +346,13 @@ with st.sidebar:
         index=cities.index("Arad")
     )
 
-    destination = "Bucharest"
-
-    st.selectbox(
-        "Destination",
-        [destination],
-        disabled=True
+    destination = st.selectbox(
+        "Destination city",
+        cities,
+        index=cities.index("Bucharest")
     )
 
-    st.caption("Destination selection will be expanded in a future upgrade.")
+    st.caption("Choose any destination in the Romania road network.")
 
     st.divider()
 
@@ -366,7 +365,7 @@ with st.sidebar:
 
     run_button = st.button(
         "🚀 Find Best Route",
-        use_container_width=True
+        width="stretch"
     )
 
     st.caption("SmartRouteAI • Academic AI Project")
@@ -425,7 +424,7 @@ results = st.session_state.results
 if results is None:
 
     st.info(
-        "Select a starting city from the sidebar and click "
+        "Select starting and destination cities from the sidebar and click "
         "'Find Best Route' to begin."
     )
 
@@ -584,9 +583,14 @@ else:
         "Some roads may overlap."
     )
 
-    fig = create_route_map(greedy, astar)
+    fig = create_route_map(
+        greedy,
+        astar,
+        results["start"],
+        results["goal"]
+    )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     # PERFORMANCE CHARTS
 
@@ -639,7 +643,7 @@ else:
         st.dataframe(
             comparison,
             hide_index=True,
-            use_container_width=True
+            width="stretch"
         )
 
     # INTELLIGENT RECOMMENDATION
