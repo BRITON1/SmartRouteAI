@@ -93,6 +93,89 @@ def convert_to_adjacency_list(network):
     return road_graph
 
 
+
+
+def extract_edge_geometries(network):
+    """
+    Preserve the actual geographical geometry of each road.
+
+    Returns coordinates in (latitude, longitude) order.
+    For parallel edges, retain the geometry of the
+    shortest edge, matching our adjacency-list conversion.
+    """
+
+    edge_geometries = {}
+
+    for u, v, key, data in network.edges(
+        keys=True,
+        data=True
+    ):
+
+        distance = data.get("length")
+
+        if distance is None:
+            continue
+
+        edge = (u, v)
+
+        previous = edge_geometries.get(edge)
+
+        if previous is None or distance < previous["length"]:
+
+            geometry = data.get("geometry")
+
+            if geometry is not None:
+
+                # Shapely geometry uses (longitude, latitude)
+                road_coordinates = [
+                    (lat, lon)
+                    for lon, lat in geometry.coords
+                ]
+
+            else:
+
+                # Fallback for edges without geometry
+                road_coordinates = [
+                    (
+                        network.nodes[u]["y"],
+                        network.nodes[u]["x"]
+                    ),
+                    (
+                        network.nodes[v]["y"],
+                        network.nodes[v]["x"]
+                    )
+                ]
+
+            # Ensure geometry follows the directed edge u -> v
+            start = (
+                network.nodes[u]["y"],
+                network.nodes[u]["x"]
+            )
+
+            if (
+                haversine_distance(
+                    road_coordinates[0],
+                    start
+                )
+                >
+                haversine_distance(
+                    road_coordinates[-1],
+                    start
+                )
+            ):
+                road_coordinates.reverse()
+
+            edge_geometries[edge] = {
+                "length": distance,
+                "coordinates": road_coordinates
+            }
+
+    return {
+        edge: data["coordinates"]
+        for edge, data in edge_geometries.items()
+    }
+
+
 def get_osm_road_graph(
     start_place,
     destination_place,
@@ -162,6 +245,7 @@ def get_osm_road_graph(
 
     # Convert road network into our graph structure
     road_graph = convert_to_adjacency_list(network)
+    edge_geometries = extract_edge_geometries(network)
 
     # Save coordinates for every road-network node
     coordinates = {
@@ -188,6 +272,7 @@ def get_osm_road_graph(
         "start_node": start_node,
         "goal_node": goal_node,
         "coordinates": coordinates,
+        "edge_geometries": edge_geometries,
         "start_coordinates": start_coordinates,
         "goal_coordinates": goal_coordinates,
         "start_place": start_place,
