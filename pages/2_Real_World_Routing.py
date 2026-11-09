@@ -500,139 +500,180 @@ if algorithm_results is not None:
 
     if all(
         result["found"]
-        for result in [
-            greedy,
-            astar,
-            dijkstra
-        ]
+        for result in [greedy, astar, dijkstra]
     ):
 
         st.divider()
+        st.subheader("Interactive Road Map")
 
-        st.subheader("🗺️ Interactive Road Map")
-
-        st.caption(
-            "Orange: Greedy | Cyan: A* | Green: Dijkstra. "
-            "Select or deselect routes using the map layer controls."
+        st.write(
+            "Choose which algorithm routes you want to "
+            "visualize on the OpenStreetMap."
         )
 
-        # Get the geographical coordinates of both endpoints
-        start_coordinates = road_data["start_coordinates"]
-        goal_coordinates = road_data["goal_coordinates"]
-
-        # Calculate the initial map centre
-        center_lat = (
-            start_coordinates[0] + goal_coordinates[0]
-        ) / 2
-
-        center_lon = (
-            start_coordinates[1] + goal_coordinates[1]
-        ) / 2
-
-        # Create the OpenStreetMap map
-        route_map = folium.Map(
-            location=[center_lat, center_lon],
-            zoom_start=14,
-            tiles="OpenStreetMap",
-            control_scale=True
-        )
-
-        # START MARKER
-        folium.Marker(
-            location=start_coordinates,
-            popup=f"Start: {road_data['start_place']}",
-            tooltip="Starting Location",
-            icon=folium.Icon(
-                color="green",
-                icon="play",
-                prefix="fa"
-            )
-        ).add_to(route_map)
-
-        # DESTINATION MARKER
-        folium.Marker(
-            location=goal_coordinates,
-            popup=f"Destination: {road_data['destination_place']}",
-            tooltip="Destination",
-            icon=folium.Icon(
-                color="red",
-                icon="flag",
-                prefix="fa"
-            )
-        ).add_to(route_map)
-
-
-        # ROUTE DEFINITIONS
+        # AVAILABLE ROUTES
         route_definitions = [
             {
                 "name": "Greedy Best-First Search",
                 "result": greedy,
-                "color": "orange"
+                "color": "#f59e0b",
+                "weight": 6,
+                "dash": None
             },
             {
                 "name": "A* Search",
                 "result": astar,
-                "color": "blue"
+                "color": "#22d3ee",
+                "weight": 6,
+                "dash": None
             },
             {
                 "name": "Dijkstra",
                 "result": dijkstra,
-                "color": "green"
+                "color": "#22c55e",
+                "weight": 5,
+                "dash": "10, 8"
             }
         ]
 
+        available_routes = [
+            route["name"]
+            for route in route_definitions
+        ]
 
-        # DRAW EACH ROUTE
-        for route in route_definitions:
+        # ROUTE SELECTION
+        selected_routes = st.multiselect(
+            "Select algorithms to display",
+            options=available_routes,
+            default=available_routes,
+            key="selected_route_layers"
+        )
 
-            route_group = folium.FeatureGroup(
-                name=route["name"],
-                show=True
+        if not selected_routes:
+
+            st.info(
+                "Select at least one algorithm to display its route."
             )
 
-            route_coordinates = build_route_coordinates(
-                route["result"]["path"],
-                road_data
+        else:
+
+            # JOURNEY COORDINATES
+            start_coordinates = road_data["start_coordinates"]
+            goal_coordinates = road_data["goal_coordinates"]
+
+            center_lat = (
+                start_coordinates[0] + goal_coordinates[0]
+            ) / 2
+
+            center_lon = (
+                start_coordinates[1] + goal_coordinates[1]
+            ) / 2
+
+            # CREATE MAP
+            route_map = folium.Map(
+                location=[center_lat, center_lon],
+                zoom_start=14,
+                tiles="OpenStreetMap",
+                control_scale=True
             )
 
-            folium.PolyLine(
-                locations=route_coordinates,
-                color=route["color"],
-                weight=6,
-                opacity=0.85,
-                tooltip=(
-                    f"{route['name']} - "
-                    f"{route['result']['distance_km']:.3f} km"
+            # START MARKER
+            folium.Marker(
+                location=start_coordinates,
+                popup=f"Start: {road_data['start_place']}",
+                tooltip="Starting Location",
+                icon=folium.Icon(
+                    color="green",
+                    icon="play",
+                    prefix="fa"
                 )
-            ).add_to(route_group)
+            ).add_to(route_map)
 
-            route_group.add_to(route_map)
+            # DESTINATION MARKER
+            folium.Marker(
+                location=goal_coordinates,
+                popup=f"Destination: {road_data['destination_place']}",
+                tooltip="Destination",
+                icon=folium.Icon(
+                    color="red",
+                    icon="flag",
+                    prefix="fa"
+                )
+            ).add_to(route_map)
 
+            # DRAW SELECTED ROUTES
+            for route in route_definitions:
 
-        # ADD LAYER CONTROL
-        folium.LayerControl(
-            collapsed=False
-        ).add_to(route_map)
+                if route["name"] not in selected_routes:
+                    continue
 
+                route_group = folium.FeatureGroup(
+                    name=route["name"],
+                    show=True
+                )
 
-        # FIT THE MAP TO THE JOURNEY
-        route_map.fit_bounds(
-            [
-                start_coordinates,
-                goal_coordinates
-            ],
-            padding=(40, 40)
-        )
+                route_coordinates = build_route_coordinates(
+                    route["result"]["path"],
+                    road_data
+                )
 
+                line_options = {
+                    "locations": route_coordinates,
+                    "color": route["color"],
+                    "weight": route["weight"],
+                    "opacity": 0.9,
+                    "tooltip": (
+                        f"{route['name']} - "
+                        f"{route['result']['distance_km']:.3f} km"
+                    )
+                }
 
-        # DISPLAY THE MAP IN STREAMLIT
-        st_folium(
-            route_map,
-            width=None,
-            height=650
-        )
+                if route["dash"]:
+                    line_options["dash_array"] = route["dash"]
 
-        st.caption(
-            "Map data © OpenStreetMap contributors. "
-            "Routes are calculated by SmartRouteAI."
-        )
+                folium.PolyLine(
+                    **line_options
+                ).add_to(route_group)
+
+                route_group.add_to(route_map)
+
+            # MAP LAYER CONTROL
+            folium.LayerControl(
+                collapsed=False
+            ).add_to(route_map)
+
+            # FIT MAP TO JOURNEY
+            route_map.fit_bounds(
+                [
+                    start_coordinates,
+                    goal_coordinates
+                ],
+                padding=(40, 40)
+            )
+
+            # DISPLAY MAP
+            st_folium(
+                route_map,
+                width=None,
+                height=650,
+                key="smart_route_map"
+            )
+
+            st.caption(
+                "Map data © OpenStreetMap contributors. "
+                "Routes calculated by SmartRouteAI."
+            )
+
+            # ROUTE LEGEND
+            st.markdown("### Route Legend")
+
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.markdown("🟠 **Greedy**")
+
+            with col2:
+                st.markdown("🔵 **A***")
+
+            with col3:
+                st.markdown("🟢 **Dijkstra (dashed)**")
